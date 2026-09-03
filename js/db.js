@@ -281,12 +281,16 @@ async function deleteInventory(id) {
     const item = await apiSingle('inventory', `id=eq.${id}`);
     if (!item) return { error: '物品不存在' };
 
+    // 管理员可强制删除有记录的物品（用于修正信息错误）
     const count = await apiCount('requests', `item_code=eq.${encodeURIComponent(item.code)}`);
-    if (count > 0) return { error: `该物品已有 ${count} 条领取记录，无法删除` };
 
     const result = await apiDelete('inventory', `id=eq.${id}`);
     if (result.error) return result;
-    return { success: true, message: `物品「${item.name}」已删除` };
+
+    const msg = count > 0
+        ? `物品「${item.name}」已删除（该物品原有 ${count} 条领取记录，记录保留但物品已移除）`
+        : `物品「${item.name}」已删除`;
+    return { success: true, message: msg };
 }
 
 async function updateInventory(id, field, value) {
