@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>古四村委会内部物资领取登记</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">
+            <span>古四村委会内部物资领取登记</span>
+        </div>
+        <div class="nav-links">
+            <a href="index.html" class="active">员工登记</a>
+            <a href="admin.html">管理员入口</a>
+        </div>
+    </nav>
+
+    <div class="container-narrow">
+        <div class="mode-tabs">
+            <button class="mode-tab active" id="tab-request" onclick="switchMode('request')">📝 物资领取</button>
+            <button class="mode-tab" id="tab-borrow" onclick="switchMode('borrow')">📤 物品借用</button>
+            <button class="mode-tab" id="tab-purchase" onclick="switchMode('purchase')">🛒 需求采购</button>
+        </div>
+
+        <div id="section-request">
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">📝</span>
+                <span>物资领取登记</span>
+            </div>
+            <div id="alert-container"></div>
+            <form id="request-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>领取部门 <span class="required">*</span></label>
+                        <select class="form-control input-highlight" id="department" name="department" required>
+                            <option value="">请选择部门</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>领取人姓名 <span class="required">*</span></label>
+                        <input type="text" class="form-control input-highlight" id="requester" name="requester"
+                               placeholder="请输入您的姓名" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>领取物品 <span class="required">*</span></label>
+                    <input type="text" class="form-control" id="item-search" placeholder="🔍 输入关键词搜索物品（如：笔、本、文件夹）" oninput="filterItems(this.value)" style="margin-bottom:8px;">
+                    <select class="form-control input-highlight" id="item_code" name="item_code" required>
+                        <option value="">请选择物品</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>领取数量 <span class="required">*</span></label>
+                        <input type="number" class="form-control input-highlight" id="quantity" name="quantity"
+                               min="1" value="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>备注（选填）</label>
+                        <input type="text" class="form-control" id="notes" name="notes"
+                               placeholder="如有特殊说明请填写">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">✅ 提交领取申请</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">📋</span>
+                <span>我的领取记录</span>
+            </div>
+            <div class="form-group">
+                <label>输入姓名查询</label>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" class="form-control" id="search-name" placeholder="输入您的姓名">
+                    <button class="btn btn-outline btn-sm" onclick="loadMyRequests()" style="white-space:nowrap;">🔍 查询</button>
+                </div>
+            </div>
+            <div id="my-records">
+                <div class="empty-state">
+                    <div class="empty-icon">🔎</div>
+                    <div>输入姓名后点击查询，查看您的领取记录</div>
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <div id="section-borrow" style="display:none;">
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">📤</span>
+                <span>物品借用登记</span>
+            </div>
+            <form id="borrow-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>借用部门 <span class="required">*</span></label>
+                        <select class="form-control input-highlight" id="borrow-department" required>
+                            <option value="">请选择部门</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>借用人姓名 <span class="required">*</span></label>
+                        <input type="text" class="form-control input-highlight" id="borrower"
+                               placeholder="请输入您的姓名" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>借用物品 <span class="required">*</span></label>
+                    <select class="form-control input-highlight" id="borrow-item" required>
+                        <option value="">请选择物品</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>借用数量 <span class="required">*</span></label>
+                        <input type="number" class="form-control input-highlight" id="borrow-qty"
+                               min="1" value="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>备注（选填）</label>
+                        <input type="text" class="form-control" id="borrow-notes"
+                               placeholder="如：预计归还日期">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">✅ 提交借用申请</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">📋</span>
+                <span>我的借用记录</span>
+            </div>
+            <div class="form-group">
+                <label>输入姓名查询</label>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" class="form-control" id="search-borrower" placeholder="输入您的姓名">
+                    <button class="btn btn-outline btn-sm" onclick="loadMyBorrows()" style="white-space:nowrap;">🔍 查询</button>
+                </div>
+            </div>
+            <div id="my-borrows">
+                <div class="empty-state">
+                    <div class="empty-icon">🔎</div>
+                    <div>输入姓名后点击查询，查看您的借用记录</div>
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <div id="section-purchase" style="display:none;">
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">🛒</span>
+                <span>需求采购申请</span>
+                <span style="margin-left:auto; font-size:12px; color:var(--text-muted); font-weight:normal;">
+                    库存中没有的物品，可在此申请采购
+                </span>
+            </div>
+            <div id="purchase-alert"></div>
+            <form id="purchase-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>申请部门 <span class="required">*</span></label>
+                        <select class="form-control input-highlight" id="purchase-department" required>
+                            <option value="">请选择部门</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>申请人姓名 <span class="required">*</span></label>
+                        <input type="text" class="form-control input-highlight" id="purchase-requester"
+                               placeholder="请输入您的姓名" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>物品名称 <span class="required">*</span></label>
+                        <input type="text" class="form-control input-highlight" id="purchase-item-name"
+                               placeholder="如：A4打印纸、订书机" required>
+                    </div>
+                    <div class="form-group">
+                        <label>类别</label>
+                        <input type="text" class="form-control" id="purchase-category"
+                               placeholder="如：办公文具、日用耗材">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>需求数量 <span class="required">*</span></label>
+                        <input type="number" class="form-control input-highlight" id="purchase-qty"
+                               min="1" value="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>单位</label>
+                        <input type="text" class="form-control" id="purchase-unit"
+                               placeholder="如：包/盒/个">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>预估单价（元）</label>
+                        <input type="number" class="form-control" id="purchase-price"
+                               min="0" step="0.01" placeholder="选填">
+                    </div>
+                    <div class="form-group">
+                        <label>备注（选填）</label>
+                        <input type="text" class="form-control" id="purchase-notes"
+                               placeholder="如有特殊说明请填写">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>申请原因/用途 <span class="required">*</span></label>
+                    <textarea class="form-control" id="purchase-reason" rows="2"
+                              placeholder="请简要说明为什么需要采购这个物品" required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">✅ 提交采购申请</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">📋</span>
+                <span>我的采购申请</span>
+            </div>
+            <div class="form-group">
+                <label>输入姓名查询</label>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" class="form-control" id="search-purchase-name" placeholder="输入您的姓名">
+                    <button class="btn btn-outline btn-sm" onclick="loadMyPurchaseRequests()" style="white-space:nowrap;">🔍 查询</button>
+                </div>
+            </div>
+            <div id="my-purchase-records">
+                <div class="empty-state">
+                    <div class="empty-icon">🔎</div>
+                    <div>输入姓名后点击查询，查看您的采购申请</div>
+                </div>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <!-- App Config -->
+    <script src="js/config.js"></script>
+    <!-- Database Layer (uses native fetch, no external dependency) -->
+    <script src="js/db.js"></script>
+    <!-- Employee Logic -->
+    <script src="js/employee.js"></script>
+</body>
+</html>
