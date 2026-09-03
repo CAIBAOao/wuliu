@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>古四村委会物资管理后台</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script>
+        // 全局错误捕获，防止空白页面
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e.message, e.filename, e.lineno);
+        });
+
+        // 内联登录处理 - 不依赖外部JS，确保登录功能始终可用
+        window._inlineLogin = function(event) {
+            event.preventDefault();
+            var username = document.getElementById('login-username').value;
+            var password = document.getElementById('login-password').value;
+
+            // 内联验证（与 config.js 中的值一致）
+            if (username === 'admin' && password === 'admin123') {
+                try { localStorage.setItem('admin_logged_in', 'true'); } catch(e) {}
+                // 隐藏登录页，显示管理后台
+                document.getElementById('login-page').style.display = 'none';
+                document.getElementById('admin-page').style.display = 'block';
+                // 如果 admin.js 已加载，调用其初始化函数
+                if (typeof window.showAdminPage === 'function') {
+                    window.showAdminPage();
+                } else if (typeof showAdminPage === 'function') {
+                    showAdminPage();
+                }
+                // 显示成功提示
+                if (typeof window.showToast === 'function') {
+                    window.showToast('登录成功', 'success');
+                } else if (typeof showToast === 'function') {
+                    showToast('登录成功', 'success');
+                }
+            } else {
+                var alertDiv = document.getElementById('login-alert');
+                if (alertDiv) {
+                    alertDiv.innerHTML = '<div class="alert alert-error">❌ 用户名或密码错误</div>';
+                }
+            }
+            return false;
+        };
+
+        // 页面加载后立即显示登录页（不等 DOMContentLoaded）
+        (function() {
+            function showLogin() {
+                var lp = document.getElementById('login-page');
+                if (lp) lp.style.display = 'block';
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', showLogin);
+            } else {
+                showLogin();
+            }
+        })();
+    </script>
+</head>
+<body>
+    <!-- 登录页面 -->
+    <div id="login-page" style="display:none;">
+        <div class="login-card">
+            <div class="login-title">🔐 管理员登录</div>
+            <div class="login-subtitle">请输入管理员账号和密码</div>
+            <div id="login-alert"></div>
+            <form id="login-form" onsubmit="return window._inlineLogin(event)">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" class="form-control" id="login-username" placeholder="请输入用户名" required>
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" class="form-control" id="login-password" placeholder="请输入密码" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">登 录</button>
+            </form>
+            <div style="text-align:center; margin-top:16px;">
+                <a href="index.html" style="color:var(--text-muted); font-size:13px; text-decoration:none;">← 返回员工端</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理后台 -->
+    <div id="admin-page" style="display:none;">
+        <!-- 顶部导航 -->
+        <nav class="navbar">
+            <div class="logo">
+                <span>古四村委会物资管理</span>
+            </div>
+            <div class="nav-links">
+                <a href="#" class="active" onclick="switchTab('dashboard', event)">📊 数据概览</a>
+                <a href="#" onclick="switchTab('requests', event)">📋 领取记录</a>
+                <a href="#" onclick="switchTab('stockin', event)">📥 入库管理</a>
+                <a href="#" onclick="switchTab('inventory', event)">📦 库存管理</a>
+                <a href="#" onclick="switchTab('category', event)">🏷️ 分类管理</a>
+                <a href="#" onclick="switchTab('borrow', event)">📤 借用管理</a>
+                <a href="#" onclick="switchTab('purchase', event)">🛒 需求管理</a>
+                <a href="#" onclick="switchTab('stats', event)">📈 部门统计</a>
+                <a href="#" onclick="exportExcel(event)">📥 导出Excel</a>
+                <a href="#" id="notification-bell" onclick="toggleNotificationPanel(event)" style="position:relative;" title="通知">
+                    🔔<span id="notification-badge" style="display:none; position:absolute; top:-5px; right:-5px; background:#f44336; color:white; font-size:10px; border-radius:50%; min-width:16px; height:16px; line-height:16px; text-align:center; padding:0 3px;">0</span>
+                </a>
+                <a href="#" onclick="logout(event)" style="color:#FFCDD2;">退出</a>
+            </div>
+        </nav>
+
+        <div class="container">
+            <!-- 数据概览 -->
+            <div id="tab-dashboard">
+                <div class="stats-grid" id="stats-grid">
+                    <div class="loading">加载中</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">🏢</span>
+                        <span>各部门领用情况</span>
+                    </div>
+                    <div id="dept-chart" class="table-wrapper">
+                        <div class="loading">加载中</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">📦</span>
+                        <span>各类别库存概况</span>
+                    </div>
+                    <div id="cat-chart" class="table-wrapper">
+                        <div class="loading">加载中</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 领取记录 -->
+            <div id="tab-requests" style="display:none;">
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">📋</span>
+                        <span>全部领取记录</span>
+                    </div>
+
+                    <div class="filter-bar">
+                        <div class="form-group">
+                            <label>部门</label>
+                            <select class="form-control" id="filter-dept">
+                                <option value="">全部</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>物品</label>
+                            <select class="form-control" id="filter-item">
+                                <option value="">全部</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>状态</label>
+                            <select class="form-control" id="filter-status">
+                                <option value="">全部</option>
+                                <option value="待审核">待审核</option>
+                                <option value="已发放">已发放</option>
+                                <option value="已拒绝">已拒绝</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>开始日期</label>
+                            <input type="text" class="form-control" id="filter-date-from" placeholder="2026/07/06">
+                        </div>
+                        <div class="form-group">
+                            <label>结束日期</label>
+                            <input type="text" class="form-control" id="filter-date-to" placeholder="2026/08/04">
+                        </div>
+                        <div class="form-group" style="flex:0;">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary btn-sm" onclick="loadRequests()">🔍 筛选</button>
+                        </div>
+                    </div>
+
+                    <div id="requests-table" class="table-wrapper">
+                        <div class="loading">加载中</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 入库管理 -->
+            <div id="tab-stockin" style="display:none;">
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">📥</span>
+                        <span>物品入库记录</span>
+                        <span style="margin-left:auto; font-size:12px; color:var(--text-muted); font-weight:normal;">
+                            记录每次物品入库的时间、数量和来源，方便后续查账
+                        </span>
+                        <button class="btn btn-primary btn-sm" onclick="showAddStockInModal()" style="margin-left:12px;">➕ 新增入库</button>
+                    </div>
+
+                    <div class="filter-bar">
+                        <div class="form-group">
+                            <label>物品</label>
+                            <select class="form-control" id="stockin-filter-item">
+                                <option value="">全部</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>开始日期</label>
+                            <input type="text" class="form-control" id="stockin-date-from" placeholder="2026/07/06">
+                        </div>
+                        <div class="form-group">
+                            <label>结束日期</label>
+                            <input type="text" class="form-control" id="stockin-date-to" placeholder="2026/08/04">
+                        </div>
+                        <div class="form-group" style="flex:0;">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary btn-sm" onclick="loadStockIn()">🔍 筛选</button>
+                        </div>
+                    </div>
+
+                    <div id="stockin-table" class="table-wrapper">
+                        <div class="loading">加载中</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 库存管理 -->
+            <div id="tab-inventory" style="display:none;">
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">📦</span>
+                        <span>库存总览与管理</span>
+                        <span style="margin-left:auto; font-size:12px; color:var(--text-muted); font-weight:normal;">
+                            点击采购数量或安全库存可直接修改
+                        </span>
+                        <button class="btn btn-primary btn-sm" onclick="showAddItemModal()" style="margin-left:12px;">➕ 新增物品</button>
+                    </div>
+                    <div id="inventory-table" class="table-wrapper">
+                        <div class="loading">加载中</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 分类管理 -->
+            <div id="tab-category" style="display:none;">
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">🏷️</span>
+                        <span>物品分类管理</span>
+                        <span style="margin-left:auto; font-size:12px; color:var(--text-muted); font-weight:normal;">
+                            管理物品大类，新增物品时从列表中选择
+                        </span>
+                    </div>
+
+                    <div class="filter-bar" style="margin-bottom:16px;">
+                        <div class="form-group" style="flex:1;">
+                            <label>新增分类</label>
+                            <div style="display:flex; gap:8px;">
+                                <input type="text" class="form-control" id="new-category-name" placeholder="输入分类名称，如：书写文具" onkeypress="if(event.key==='Enter')handleAddCategory(event)">
+                                <button class="btn btn-primary" onclick="handleAddCategory(event)" style="white-space:nowrap;">➕ 添加</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="category-table" class="table-wrapper">
+                        <div class="loading">加载中</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 借用管理 -->
+            <div id="tab-borrow" style="display:none;">
+                <!-- 借用统计卡片 -->
+                <div class="stats-grid" id="borrow-stats-grid">                    <div class="loading">加载中</div>
+                </div>
+
+                <!-- 可借用物品管理 -->
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">📦</span>
+                        <span>可借用物品管理</span>
+                        <span style="margin-left:auto; font-size:12px; color:var(--text-muted); font-weight:normal;">
+                            管理员可添加/删除可借用物品
+                        </span>
+                        <button class="btn btn-primary btn-sm" onclick="showAddBorrowItemModal()" style="margin-left:12px;">➕ 新增借用物品</button>
+                    </div>
+                    <div id="borrow-items-table" class="table-wrapper">
+                        <div class="loading">加载中</div>
+                    </div>
+                </div>
+
+                <!-- 借用记录 -->
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">📋</span>
+                        <span>借用记录</span>
+                    </div>
+                    <div class="filter-bar">
+                        <div class="form-group">
+                            <label>部门</label>
+                            <select class="form-control" id="borrow-filter-dept">
+                                <option value="">全部</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>状态</label>
+                            <select class="form-control" id="borrow-filter-status">
+                                <option value="">全部</option>
+                                <option value="借出中">借出中</option>
+                                <option value="已归还">已归还</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex:0;">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary btn-sm" onclick="loadBorrowRecords()">🔍 筛选</button>
+                        </div>
+                    </div>
+                    <div id="borrow-records-table" class="table-wrapper">
+                        <div class="loading">加载中</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 需求管理 -->
+            <div id="tab-purchase" style="display:none;">
+                <!-- 需求统计卡片 -->
+                <div class="stats-grid" id="purchase-stats-grid">
+                    <div class="loading">加载中</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">🛒</span>
+                        <span>采购需求管理</span>
+                        <span style="margin-left:auto; font-size:12px; color:var(--text-muted); font-weight:normal;">
+                            处理员工提交的采购需求申请
+                        </span>
+                    </div>
+
+                    <div class="filter-bar">
+                        <div class="form-group">
+                            <label>部门</label>
+                            <select class="form-control" id="purchase-filter-dept">
+                                <option value="">全部</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>状态</label>
+                            <select class="form-control" id="purchase-filter-status">
+                                <option value="">全部</option>
+                                <option value="待采购">待采购</option>
+                                <option value="已采购">已采购</option>
+                                <option value="已拒绝">已拒绝</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>开始日期</label>
+                            <input type="text" class="form-control" id="purchase-date-from" placeholder="2026/07/06">
+                        </div>
+                        <div class="form-group">
+                            <label>结束日期</label>
+                            <input type="text" class="form-control" id="purchase-date-to" placeholder="2026/08/04">
+                        </div>
+                        <div class="form-group" style="flex:0;">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary btn-sm" onclick="loadPurchaseRequests()">🔍 筛选</button>
+                        </div>
+                    </div>
+
+                    <div id="purchase-table" class="table-wrapper">
+                        <div class="loading">加载中</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 部门统计 -->
+            <div id="tab-stats" style="display:none;">
+                <div class="stats-grid" id="stats-grid-2">
+                    <div class="loading">加载中</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">📊</span>
+                        <span>部门领用明细统计</span>
+                    </div>
+                    <div id="dept-detail-table" class="table-wrapper">
+                        <div class="loading">加载中</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增物品弹窗 -->
+    <div id="add-item-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <span style="font-size:18px; font-weight:700; color:var(--text-main);">➕ 新增库存物品</span>
+                <span class="modal-close" onclick="closeAddItemModal()">✕</span>
+            </div>
+            <div id="add-item-alert"></div>
+            <form id="add-item-form" onsubmit="addItem(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>物品名称 <span class="required">*</span></label>
+                        <input type="text" class="form-control" id="add-name" placeholder="如：中性笔(黑色)" required>
+                    </div>
+                    <div class="form-group">
+                        <label>物品编号</label>
+                        <input type="text" class="form-control" id="add-code" placeholder="留空则自动生成">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>类别 <span class="required">*</span></label>
+                        <select class="form-control" id="add-category" required onchange="handleCategoryChange(this, 'add-category-new')">
+                            <option value="">请选择类别</option>
+                        </select>
+                        <input type="text" class="form-control" id="add-category-new" placeholder="输入新分类名称" style="display:none; margin-top:8px;">
+                    </div>
+                    <div class="form-group">
+                        <label>单位 <span class="required">*</span></label>
+                        <input type="text" class="form-control" id="add-unit" list="unit-list" placeholder="如：支/包/个/盒" required>
+                        <datalist id="unit-list">
+                            <option value="支">
+                            <option value="包">
+                            <option value="个">
+                            <option value="盒">
+                            <option value="本">
+                            <option value="卷">
+                            <option value="把">
+                            <option value="块">
+                        </datalist>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>采购数量</label>
+                        <input type="number" class="form-control input-highlight" id="add-purchase-qty" value="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>安全库存</label>
+                        <input type="number" class="form-control input-highlight" id="add-safety-stock" value="0" min="0">
+                    </div>
+                </div>
+                <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px;">
+                    <button type="button" class="btn btn-outline" onclick="closeAddItemModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">确认添加</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 新增借用物品弹窗 -->
+    <div id="add-borrow-item-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <span style="font-size:18px; font-weight:700; color:var(--text-main);">➕ 新增可借用物品</span>
+                <span class="modal-close" onclick="closeAddBorrowItemModal()">✕</span>
+            </div>
+            <div id="add-borrow-item-alert"></div>
+            <form id="add-borrow-item-form" onsubmit="addBorrowItem(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>物品名称 <span class="required">*</span></label>
+                        <input type="text" class="form-control" id="add-borrow-name" placeholder="如：投影仪/摄像机/工具箱" required>
+                    </div>
+                    <div class="form-group">
+                        <label>类别 <span class="required">*</span></label>
+                        <select class="form-control" id="add-borrow-category" required onchange="handleCategoryChange(this, 'add-borrow-category-new')">
+                            <option value="">请选择类别</option>
+                        </select>
+                        <input type="text" class="form-control" id="add-borrow-category-new" placeholder="输入新分类名称" style="display:none; margin-top:8px;">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>可借总数 <span class="required">*</span></label>
+                    <input type="number" class="form-control input-highlight" id="add-borrow-qty" value="1" min="1">
+                </div>
+                <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px;">
+                    <button type="button" class="btn btn-outline" onclick="closeAddBorrowItemModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">确认添加</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 新增入库弹窗 -->
+    <div id="add-stockin-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <span style="font-size:18px; font-weight:700; color:var(--text-main);">📥 物品入库登记</span>
+                <span class="modal-close" onclick="closeAddStockInModal()">✕</span>
+            </div>
+            <div id="add-stockin-alert"></div>
+            <form id="add-stockin-form" onsubmit="addStockInRecord(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>入库物品 <span class="required">*</span></label>
+                        <select class="form-control" id="stockin-item" required>
+                            <option value="">请选择物品</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>入库数量 <span class="required">*</span></label>
+                        <input type="number" class="form-control input-highlight" id="stockin-qty" value="1" min="1" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>供应商/来源</label>
+                        <input type="text" class="form-control" id="stockin-supplier" placeholder="如：XX文具店 / 上级配发">
+                    </div>
+                    <div class="form-group">
+                        <label>操作人 <span class="required">*</span></label>
+                        <input type="text" class="form-control" id="stockin-operator" placeholder="请输入操作人姓名" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>入库日期</label>
+                        <input type="text" class="form-control" id="stockin-date" placeholder="留空默认为今天">
+                    </div>
+                    <div class="form-group">
+                        <label>备注</label>
+                        <input type="text" class="form-control" id="stockin-notes" placeholder="选填">
+                    </div>
+                </div>
+                <div class="alert" style="background:var(--primary-light); color:var(--text-main); padding:10px; border-radius:8px; font-size:13px; margin-bottom:8px;">
+                    💡 提示：入库后会自动增加对应物品的库存数量（采购数量）
+                </div>
+                <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px;">
+                    <button type="button" class="btn btn-outline" onclick="closeAddStockInModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">确认入库</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 通知面板 -->
+    <div id="notification-panel" style="display:none; position:fixed; top:60px; right:20px; width:360px; max-height:400px; background:white; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.2); z-index:10000; overflow:hidden;">
+        <div style="padding:12px 16px; background:var(--primary, #1976D2); color:white; font-weight:600; display:flex; justify-content:space-between; align-items:center;">
+            <span>🔔 待处理通知</span>
+            <span onclick="document.getElementById('notification-panel').style.display='none'" style="cursor:pointer; font-size:18px;">✕</span>
+        </div>
+        <div id="notification-list" style="max-height:340px; overflow-y:auto;">
+            <div style="padding:20px; text-align:center; color:var(--text-muted, #999);">暂无待处理通知</div>
+        </div>
+    </div>
+
+    <!-- 浮动通知弹窗 -->
+    <div id="floating-notification" style="display:none; position:fixed; top:80px; right:20px; width:320px; background:white; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.25); z-index:10001; overflow:hidden; border-left:4px solid #FF9800;">
+        <div style="padding:14px 16px;">
+            <div style="font-weight:600; color:var(--text-main, #333); margin-bottom:6px; display:flex; align-items:center; gap:8px;">
+                <span id="float-notif-icon">📋</span>
+                <span id="float-notif-title">新申请通知</span>
+            </div>
+            <div id="float-notif-content" style="font-size:13px; color:var(--text-muted, #666); line-height:1.5;"></div>
+            <div style="margin-top:10px; display:flex; gap:8px;">
+                <button onclick="viewNotification()" style="flex:1; padding:6px 12px; background:var(--primary, #1976D2); color:white; border:none; border-radius:6px; cursor:pointer; font-size:12px;">查看详情</button>
+                <button onclick="closeFloatingNotification()" style="padding:6px 12px; background:#f0f0f0; color:#666; border:none; border-radius:6px; cursor:pointer; font-size:12px;">知道了</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SheetJS for Excel export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <!-- App Config -->
+    <script src="js/config.js"></script>
+    <!-- Database Layer (uses native fetch, no external dependency) -->
+    <script src="js/db.js"></script>
+    <!-- Admin Logic -->
+    <script src="js/admin.js"></script>
+    <!-- Fallback: 确保登录页面可见 -->
+    <script>
+        (function() {
+            // 如果 2 秒后登录页和管理页都不可见，强制显示登录页
+            setTimeout(function() {
+                var login = document.getElementById('login-page');
+                var admin = document.getElementById('admin-page');
+                if (login && admin && login.style.display === 'none' && admin.style.display === 'none') {
+                    login.style.display = 'block';
+                }
+            }, 2000);
+        })();
+    </script>
+</body>
+</html>
