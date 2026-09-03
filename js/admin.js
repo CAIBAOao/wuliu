@@ -137,6 +137,11 @@ function switchTab(tab, e) {
     document.getElementById('tab-' + tab).style.display = 'block';
     e.target.classList.add('active');
 
+    // 切换到非库存管理页面时，清除预警筛选
+    if (tab !== 'inventory') {
+        _filterLowStock = false;
+    }
+
     if (tab === 'dashboard') loadDashboard();
     else if (tab === 'requests') loadRequests();
     else if (tab === 'stockin') loadStockIn();
@@ -237,9 +242,9 @@ async function loadDashboard() {
                 <div class="stat-label">物品种类</div>
                 <div class="stat-value">${s.total_items}</div>
             </div>
-            <div class="stat-card danger">
+            <div class="stat-card danger" onclick="showLowStockItems()" style="cursor:pointer; transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
                 <div class="stat-icon">⚠️</div>
-                <div class="stat-label">库存预警</div>
+                <div class="stat-label">库存预警（点击查看）</div>
                 <div class="stat-value">${s.low_stock}</div>
             </div>
         `;
@@ -436,7 +441,22 @@ async function loadInventory() {
     try {
         inventoryData = await getAdminInventory();
 
-        let html = `
+        // 如果开启了预警筛选，只显示库存不足的物品
+        let displayData = inventoryData;
+        let filterBanner = '';
+        if (_filterLowStock) {
+            displayData = inventoryData.filter(item => item.remaining <= item.safety_stock);
+            filterBanner = `
+                <div style="background:#FFF3E0; border:1px solid #FFB74D; border-radius:8px; padding:12px 16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <span style="color:#E65100; font-weight:600;">⚠️ 库存预警筛选</span>
+                        <span style="color:#5D4037; margin-left:12px; font-size:13px;">当前显示 ${displayData.length} 种库存不足的物品（剩余库存 ≤ 安全库存）</span>
+                    </div>
+                    <button class="btn btn-outline btn-sm" onclick="clearLowStockFilter()">✕ 显示全部物品</button>
+                </div>`;
+        }
+
+        let html = filterBanner + `
             <table>
                 <thead>
                     <tr>
@@ -455,7 +475,7 @@ async function loadInventory() {
                 <tbody>`;
 
         let totalPurchase = 0, totalClaimed = 0, totalRemaining = 0;
-        inventoryData.forEach(item => {
+        displayData.forEach(item => {
             totalPurchase += item.purchase_qty;
             totalClaimed += item.claimed_qty;
             totalRemaining += item.remaining;
@@ -463,10 +483,8 @@ async function loadInventory() {
             const statusClass = item.status === '正常' ? 'tag-normal' :
                                item.status === '库存不足' ? 'tag-warning' : 'tag-danger';
 
-            const canDelete = item.claimed_qty === 0;
-            const deleteBtn = canDelete
-                ? `<button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id}, '${item.name.replace(/'/g, "\\'")}')" title="删除">🗑️</button>`
-                : `<span style="color:var(--text-muted); font-size:12px;" title="已有领取记录，无法删除">—</span>`;
+            // 管理员可删除任何物品（包括有领取记录的，用于修正信息错误）
+            const deleteBtn = `<button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id}, '${item.name.replace(/'/g, "\\'")}', ${item.claimed_qty})" title="删除物品">🗑️</button>`;
 
             html += `
                 <tr>
@@ -759,8 +777,13 @@ async function addItem(e) {
 }
 
 // 删除物品
-async function deleteItem(id, name) {
-    if (!confirm(`确定要删除物品「${name}」吗？\n\n注意：已有领取记录的物品无法删除。`)) return;
+async function deleteItem(id, name, claimedQty) {
+    const hasRecords = claimedQty > 0;
+    const confirmMsg = hasRecords
+        ? `⚠️ 确定要删除物品「${name}」吗？\n\n该物品已有 ${claimedQty} 件领取记录。\n删除后：\n• 物品将从库存列表中移除\n• 历史领取记录仍会保留（用于查账）\n• 此操作不可撤销，请谨慎操作！`
+        : `确定要删除物品「${name}」吗？\n\n该物品暂无领取记录，删除后不可恢复。`;
+
+    if (!confirm(confirmMsg)) return;
 
     try {
         const data = await deleteInventory(id);
@@ -768,12 +791,36 @@ async function deleteItem(id, name) {
             showToast(data.message || '物品已删除', 'success');
             loadInventory();
             loadFilters();
+            // 刷新仪表盘统计
+            if (typeof loadDashboard === 'function') loadDashboard();
         } else {
             showToast(data.error || '删除失败', 'error');
         }
     } catch {
         showToast('网络错误', 'error');
     }
+}
+
+// 全局变量：是否只显示库存预警物品
+let _filterLowStock = false;
+
+// 点击库存预警卡片，跳转到库存管理并筛选预警物品
+function showLowStockItems() {
+    _filterLowStock = true;
+    // 切换到库存管理 tab
+    const link = document.querySelector('a[onclick*="switchTab(\'inventory\'"]');
+    if (link) link.click();
+    // 延迟加载，确保 tab 切换完成
+    setTimeout(() => {
+        loadInventory();
+        showToast('已筛选出所有库存预警物品', 'success');
+    }, 100);
+}
+
+// 清除库存预警筛选，显示所有物品
+function clearLowStockFilter() {
+    _filterLowStock = false;
+    loadInventory();
 }
 
 
