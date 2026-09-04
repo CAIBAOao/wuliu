@@ -13,7 +13,8 @@ const SUPABASE_ANON_KEY = 'sb_publishable_u3rPGcaMabgCygN5wdDbOg_Aif22NBA';
 // 部门列表
 const DEPARTMENTS = [
     '党委(党建)办', '经济办', '民生办', '宣传办',
-    '财务办', '绿美办', '纪检办', '基建办', '平安办'
+    '财务办', '绿美办', '纪检办', '基建办',
+    '平安办(执法)', '平安办(治保会)', '平安办(消防办)'
 ];
 
 // 管理员账号（前端验证，内部工具使用）
