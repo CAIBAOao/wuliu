@@ -86,19 +86,44 @@ async function loadDepartments() {
 // 全局保存物品列表，用于搜索过滤
 let allInventoryItems = [];
 
+// 在下拉框下方显示加载失败提示 + 重试按钮
+function showRetryHint(anchorSelect, message, retryFn) {
+    const parent = anchorSelect.parentElement;
+    const old = parent.querySelector('.load-error-hint');
+    if (old) old.remove();
+    const hint = document.createElement('div');
+    hint.className = 'load-error-hint';
+    hint.style.cssText = 'color:#c62828; font-size:12px; margin-top:6px;';;
+    const msg = document.createElement('span');
+    msg.textContent = message;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-outline btn-sm';
+    btn.style.cssText = 'margin-left:8px; padding:2px 10px;';
+    btn.textContent = '🔄 重试';
+    btn.addEventListener('click', retryFn);
+    hint.appendChild(msg);
+    hint.appendChild(btn);
+    parent.appendChild(hint);
+}
+
+// 清除下拉框下方的错误提示
+function clearRetryHint(anchorSelect) {
+    const old = anchorSelect.parentElement.querySelector('.load-error-hint');
+    if (old) old.remove();
+}
+
 // 加载物品列表
 async function loadInventory() {
+    const select = document.getElementById('item_code');
+    select.innerHTML = '<option value="">加载中...</option>';
     try {
         const items = await getInventory();
         allInventoryItems = items; // 保存到全局变量
-        const select = document.getElementById('item_code');
+        clearRetryHint(select);
 
         if (items.length === 0) {
-            const opt = document.createElement('option');
-            opt.value = '';
-            opt.textContent = '暂无可用物品，请联系管理员添加';
-            opt.disabled = true;
-            select.appendChild(opt);
+            select.innerHTML = '<option value="" disabled>暂无可用物品，请联系管理员添加</option>';
             return;
         }
 
@@ -112,6 +137,9 @@ async function loadInventory() {
         renderItemOptions(grouped);
     } catch (err) {
         console.error('加载物品失败:', err);
+        allInventoryItems = [];
+        select.innerHTML = '<option value="">物品列表加载失败</option>';
+        showRetryHint(select, '⚠️ 物品列表加载失败（网络连接超时或数据库暂时不可用），请检查网络后重试。', loadInventory);
     }
 }
 
@@ -322,16 +350,14 @@ async function loadBorrowDepartments() {
 
 // 加载可借用物品列表
 async function loadBorrowItems() {
+    const select = document.getElementById('borrow-item');
+    select.innerHTML = '<option value="">加载中...</option>';
     try {
         const items = await getBorrowItems();
-        const select = document.getElementById('borrow-item');
+        clearRetryHint(select);
 
         if (items.length === 0) {
-            const opt = document.createElement('option');
-            opt.value = '';
-            opt.textContent = '暂无可借用物品，请联系管理员添加';
-            opt.disabled = true;
-            select.appendChild(opt);
+            select.innerHTML = '<option value="" disabled>暂无可借用物品，请联系管理员添加</option>';
             return;
         }
 
@@ -356,6 +382,8 @@ async function loadBorrowItems() {
         });
     } catch (err) {
         console.error('加载借用物品失败:', err);
+        select.innerHTML = '<option value="">借用物品加载失败</option>';
+        showRetryHint(select, '⚠️ 借用物品加载失败（网络连接超时或数据库暂时不可用），请检查网络后重试。', loadBorrowItems);
     }
 }
 
