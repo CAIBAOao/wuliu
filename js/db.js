@@ -11,6 +11,25 @@ const API_HEADERS = {
     'Content-Type': 'application/json'
 };
 
+// 请求超时时间（毫秒），手机弱网下避免一直卡住
+const FETCH_TIMEOUT = 15000;
+
+// 带超时的 fetch 封装
+async function fetchWithTimeout(url, options = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+// 判断是否为网络/超时错误
+function isNetworkError(err) {
+    return err && (err.name === 'AbortError' || err instanceof TypeError);
+}
+
 // ============================================================
 // 通用辅助
 // ============================================================
@@ -22,7 +41,13 @@ function today() {
 // 通用 GET 请求
 async function apiGet(table, query = '') {
     const url = `${API_BASE}/${table}?${query}`;
-    const resp = await fetch(url, { headers: API_HEADERS });
+    let resp;
+    try {
+        resp = await fetchWithTimeout(url, { headers: API_HEADERS });
+    } catch (err) {
+        console.error(`GET ${table} 网络错误:`, err);
+        throw err; // 向上抛出，由调用方提示网络/超时
+    }
     if (!resp.ok) {
         const text = await resp.text();
         console.error(`GET ${table} failed:`, resp.status, text);
@@ -33,11 +58,17 @@ async function apiGet(table, query = '') {
 
 // 通用 POST 请求
 async function apiPost(table, data) {
-    const resp = await fetch(`${API_BASE}/${table}`, {
-        method: 'POST',
-        headers: { ...API_HEADERS, 'Prefer': 'return=representation' },
-        body: JSON.stringify(data)
-    });
+    let resp;
+    try {
+        resp = await fetchWithTimeout(`${API_BASE}/${table}`, {
+            method: 'POST',
+            headers: { ...API_HEADERS, 'Prefer': 'return=representation' },
+            body: JSON.stringify(data)
+        });
+    } catch (err) {
+        console.error(`POST ${table} 网络错误:`, err);
+        return { error: '网络连接失败，请检查网络后重试' };
+    }
     if (!resp.ok) {
         const text = await resp.text();
         console.error(`POST ${table} failed:`, resp.status, text);
@@ -48,11 +79,17 @@ async function apiPost(table, data) {
 
 // 通用 PATCH 请求
 async function apiPatch(table, filter, data) {
-    const resp = await fetch(`${API_BASE}/${table}?${filter}`, {
-        method: 'PATCH',
-        headers: { ...API_HEADERS, 'Prefer': 'return=representation' },
-        body: JSON.stringify(data)
-    });
+    let resp;
+    try {
+        resp = await fetchWithTimeout(`${API_BASE}/${table}?${filter}`, {
+            method: 'PATCH',
+            headers: { ...API_HEADERS, 'Prefer': 'return=representation' },
+            body: JSON.stringify(data)
+        });
+    } catch (err) {
+        console.error(`PATCH ${table} 网络错误:`, err);
+        return { error: '网络连接失败，请检查网络后重试' };
+    }
     if (!resp.ok) {
         const text = await resp.text();
         console.error(`PATCH ${table} failed:`, resp.status, text);
@@ -63,10 +100,16 @@ async function apiPatch(table, filter, data) {
 
 // 通用 DELETE 请求
 async function apiDelete(table, filter) {
-    const resp = await fetch(`${API_BASE}/${table}?${filter}`, {
-        method: 'DELETE',
-        headers: API_HEADERS
-    });
+    let resp;
+    try {
+        resp = await fetchWithTimeout(`${API_BASE}/${table}?${filter}`, {
+            method: 'DELETE',
+            headers: API_HEADERS
+        });
+    } catch (err) {
+        console.error(`DELETE ${table} 网络错误:`, err);
+        return { error: '网络连接失败，请检查网络后重试' };
+    }
     if (!resp.ok) {
         const text = await resp.text();
         console.error(`DELETE ${table} failed:`, resp.status, text);
@@ -78,7 +121,13 @@ async function apiDelete(table, filter) {
 // 单行查询
 async function apiSingle(table, query = '') {
     const url = `${API_BASE}/${table}?${query}&limit=1`;
-    const resp = await fetch(url, { headers: { ...API_HEADERS, 'Accept': 'application/vnd.pgrst.object+json' } });
+    let resp;
+    try {
+        resp = await fetchWithTimeout(url, { headers: { ...API_HEADERS, 'Accept': 'application/vnd.pgrst.object+json' } });
+    } catch (err) {
+        console.error(`GET(single) ${table} 网络错误:`, err);
+        return null;
+    }
     if (resp.status === 406) return null; // No rows found
     if (!resp.ok) {
         const text = await resp.text();
@@ -91,9 +140,15 @@ async function apiSingle(table, query = '') {
 // 计数查询
 async function apiCount(table, filter = '') {
     const url = `${API_BASE}/${table}?${filter}`;
-    const resp = await fetch(url, {
-        headers: { ...API_HEADERS, 'Prefer': 'count=exact' }
-    });
+    let resp;
+    try {
+        resp = await fetchWithTimeout(url, {
+            headers: { ...API_HEADERS, 'Prefer': 'count=exact' }
+        });
+    } catch (err) {
+        console.error(`COUNT ${table} 网络错误:`, err);
+        return 0;
+    }
     if (!resp.ok) return 0;
     const count = resp.headers.get('content-range');
     if (count) {
